@@ -55,6 +55,8 @@ module Data.Primitive.SmallArray
   , sizeofSmallArray
   , sizeofSmallMutableArray
   , unsafeTraverseSmallArray
+  , runSmallArrays
+  , runSmallArraysHet
   ) where
 
 
@@ -434,6 +436,27 @@ createSmallArray 0 _ _ = emptySmallArray
 createSmallArray i x k =
   runST $ newSmallArray i x >>= \sa -> k sa *> unsafeFreezeSmallArray sa
 {-# INLINE createSmallArray #-}
+
+-- | Create zero or more arrays of the same type within an arbitrary
+-- 'Traversable' context. For a more general version, see
+-- 'runArraysHet'.
+runSmallArrays
+  :: Traversable t
+  => (forall s. ST s (t (SmallMutableArray s a)))
+  -> t (SmallArray a)
+runSmallArrays m = runST $ m >>= traverse unsafeFreezeSmallArray
+
+-- | Create zero or more arrays that may have different types within
+-- a rank-2-traversable context, such as a flipped `vinyl` record.
+-- See [rtraverse](https://hackage.haskell.org/package/vinyl-0.8.1.1/docs/Data-Vinyl-Core.html#v:rtraverse)
+-- in that package. For a simpler but less general version, see
+-- 'runArrays'.
+runSmallArraysHet
+  :: (forall h f g.
+       (Applicative h => (forall x. f x -> h (g x)) -> t f -> h (t g)))
+  -> (forall s. ST s (t (SmallMutableArray s)))
+  -> t SmallArray
+runSmallArraysHet f m = runST $ m >>= f unsafeFreezeSmallArray
 
 infixl 1 ?
 (?) :: (a -> b -> c) -> (b -> a -> c)

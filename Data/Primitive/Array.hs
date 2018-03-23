@@ -23,7 +23,8 @@ module Data.Primitive.Array (
   cloneArray, cloneMutableArray,
   sizeofArray, sizeofMutableArray,
   fromListN, fromList,
-  unsafeTraverseArray
+  unsafeTraverseArray,
+  runArrays, runArraysHet
 ) where
 
 import Control.Monad.Primitive
@@ -284,6 +285,27 @@ createArray n x f = runST $ do
   ma <- newArray n x
   f ma
   unsafeFreezeArray ma
+
+-- | Create zero or more arrays of the same type within an arbitrary
+-- 'Traversable' context. For a more general version, see
+-- 'runArraysHet'.
+runArrays
+  :: Traversable t
+  => (forall s. ST s (t (MutableArray s a)))
+  -> t (Array a)
+runArrays m = runST $ m >>= traverse unsafeFreezeArray
+
+-- | Create zero or more arrays that may have different types within
+-- a rank-2-traversable context, such as a flipped `vinyl` record.
+-- See [rtraverse](https://hackage.haskell.org/package/vinyl-0.8.1.1/docs/Data-Vinyl-Core.html#v:rtraverse)
+-- in that package. For a simpler but less general version, see
+-- 'runArrays'.
+runArraysHet
+  :: (forall h f g.
+       (Applicative h => (forall x. f x -> h (g x)) -> t f -> h (t g)))
+  -> (forall s. ST s (t (MutableArray s)))
+  -> t Array
+runArraysHet f m = runST $ m >>= f unsafeFreezeArray
 
 die :: String -> String -> a
 die fun problem = error $ "Data.Primitive.Array." ++ fun ++ ": " ++ problem
